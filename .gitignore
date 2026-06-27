@@ -1,0 +1,7 @@
+factorio_wfc_draft/
+memory_bank/
+build/
+__pycache__/
+*.pyd
+.venv/
+.pytest_cache/
