@@ -1,9 +1,24 @@
 #include "wire/snapshot_codec.h"
 
+#include "cell.h"
 #include "tile.h"
 #include "wire/wire_format.h"
 
+#include <cstring>
+
 namespace fwfc::wire {
+
+namespace {
+
+std::uint32_t read_u32_le(const std::uint8_t* data) {
+    std::uint32_t value = 0;
+    std::memcpy(&value, data, sizeof(value));
+    return value;
+}
+
+bool is_valid_direction(std::uint8_t value) { return value <= static_cast<std::uint8_t>(Direction::West); }
+
+}  // namespace
 
 bool decode_snapshot(std::uint32_t width,
                      std::uint32_t height,
@@ -33,6 +48,23 @@ bool decode_snapshot(std::uint32_t width,
             }
             if (tag == kCellTagEmpty) {
                 grid.set(x, y, EmptyTile{});
+                continue;
+            }
+            if (tag == kTypeIdBelt) {
+                const std::uint8_t from_dir_raw = cells.data[offset + 1];
+                const std::uint8_t to_dir_raw = cells.data[offset + 2];
+                if (!is_valid_direction(from_dir_raw) || !is_valid_direction(to_dir_raw)) {
+                    error = "snapshot: invalid belt direction";
+                    return false;
+                }
+
+                const Cell center{static_cast<int>(x), static_cast<int>(y)};
+                BeltTile belt;
+                belt.from_cell = cell_in_direction(center, static_cast<Direction>(from_dir_raw));
+                belt.to_cell = cell_in_direction(center, static_cast<Direction>(to_dir_raw));
+                belt.left_item_id = read_u32_le(cells.data + offset + 4);
+                belt.right_item_id = read_u32_le(cells.data + offset + 8);
+                grid.set(x, y, belt);
                 continue;
             }
 

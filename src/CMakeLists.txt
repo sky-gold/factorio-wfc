@@ -1,4 +1,5 @@
 add_library(factorio_wfc_lib STATIC
+    cell.cpp
     tile.cpp
     grid.cpp
     catalog.cpp
