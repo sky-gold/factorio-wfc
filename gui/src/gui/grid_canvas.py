@@ -13,7 +13,18 @@ from PIL import Image, ImageDraw, ImageFont
 from gui.belt_lane_layout import LANE_ICON_SIZE, lane_icon_positions
 from gui.belt_textures import flow_key, register_belt_textures, texture_for_belt_tile
 from gui.item_textures import texture_for_item_id
-from snapshot import EMPTY_ITEM_ID, TAG_EMPTY, TAG_UNDECIDED, TYPE_ID_BELT, get_cell_tag, read_cell_belt
+from snapshot import (
+    EMPTY_ITEM_ID,
+    TAG_EMPTY,
+    TAG_UNDECIDED,
+    TYPE_ID_BELT,
+    TYPE_ID_INPUT_BELT,
+    TYPE_ID_OUTPUT_BELT,
+    get_cell_tag,
+    read_cell_belt,
+    read_cell_input_belt,
+    read_cell_output_belt,
+)
 
 CELL_SIZE = 32
 CELL_GAP = 2
@@ -146,6 +157,20 @@ def _cell_texture(cells: bytearray, width: int, x: int, y: int) -> str | int:
         if belt is not None:
             return texture_for_belt_tile(x, y, belt.from_x, belt.from_y, belt.to_x, belt.to_y)
         return CELL_TEX_UNDECIDED
+    if tag == TYPE_ID_INPUT_BELT:
+        input_belt = read_cell_input_belt(cells, width, x, y)
+        if input_belt is not None:
+            from_x = 2 * x - input_belt.to_x
+            from_y = 2 * y - input_belt.to_y
+            return texture_for_belt_tile(x, y, from_x, from_y, input_belt.to_x, input_belt.to_y)
+        return CELL_TEX_UNDECIDED
+    if tag == TYPE_ID_OUTPUT_BELT:
+        output_belt = read_cell_output_belt(cells, width, x, y)
+        if output_belt is not None:
+            to_x = 2 * x - output_belt.from_x
+            to_y = 2 * y - output_belt.from_y
+            return texture_for_belt_tile(x, y, output_belt.from_x, output_belt.from_y, to_x, to_y)
+        return CELL_TEX_UNDECIDED
     if tag == TAG_EMPTY:
         return CELL_TEX_EMPTY
     return CELL_TEX_UNDECIDED
@@ -205,6 +230,28 @@ def _add_lane_overlay(
     )
 
 
+def _add_rate_lane_overlay(
+    texture: str | int,
+    rate: float,
+    cell_x: int,
+    cell_y: int,
+    offset_x: int,
+    offset_y: int,
+    *,
+    parent: str | int,
+) -> None:
+    base_x = cell_y * CELL_PITCH + max(0, offset_x - 14)
+    base_y = cell_x * CELL_PITCH + max(0, offset_y - 1)
+    dpg.add_text(f"{rate:.1f}", parent=parent, pos=(base_x, base_y))
+    dpg.add_image(
+        texture,
+        width=LANE_ICON_SIZE,
+        height=LANE_ICON_SIZE,
+        parent=parent,
+        pos=(base_x + 22, base_y),
+    )
+
+
 def _add_belt_cell(
     tag: str,
     cells: bytearray,
@@ -261,6 +308,108 @@ def _add_belt_cell(
             _add_lane_overlay(right_tex, cell_x, cell_y, right_pos[0], right_pos[1], parent=parent)
 
 
+def _add_input_belt_cell(
+    tag: str,
+    cells: bytearray,
+    grid_width: int,
+    cell_x: int,
+    cell_y: int,
+    on_left_click: Callable[[int, int], None],
+    on_right_click: Callable[[int, int], None],
+    on_hover: Callable[[int, int], None] | None,
+    *,
+    parent: str | int,
+) -> None:
+    input_belt = read_cell_input_belt(cells, grid_width, cell_x, cell_y)
+    if input_belt is None:
+        _add_cell_button(
+            tag,
+            CELL_TEX_UNDECIDED,
+            on_left_click,
+            on_right_click,
+            on_hover,
+            cell_x,
+            cell_y,
+            parent=parent,
+        )
+        return
+
+    from_x = 2 * cell_x - input_belt.to_x
+    from_y = 2 * cell_y - input_belt.to_y
+    belt_tex = texture_for_belt_tile(cell_x, cell_y, from_x, from_y, input_belt.to_x, input_belt.to_y)
+    _add_cell_button(tag, belt_tex, on_left_click, on_right_click, on_hover, cell_x, cell_y, parent=parent)
+
+    flow = flow_key(cell_x, cell_y, from_x, from_y, input_belt.to_x, input_belt.to_y)
+    positions = lane_icon_positions(flow)
+    if positions is None:
+        return
+
+    left_pos, right_pos = positions
+    if input_belt.left_item_id != EMPTY_ITEM_ID:
+        left_tex = texture_for_item_id(input_belt.left_item_id)
+        if left_tex is not None:
+            _add_rate_lane_overlay(
+                left_tex, input_belt.left_max_rate, cell_x, cell_y, left_pos[0], left_pos[1], parent=parent
+            )
+    if input_belt.right_item_id != EMPTY_ITEM_ID:
+        right_tex = texture_for_item_id(input_belt.right_item_id)
+        if right_tex is not None:
+            _add_rate_lane_overlay(
+                right_tex, input_belt.right_max_rate, cell_x, cell_y, right_pos[0], right_pos[1], parent=parent
+            )
+
+
+def _add_output_belt_cell(
+    tag: str,
+    cells: bytearray,
+    grid_width: int,
+    cell_x: int,
+    cell_y: int,
+    on_left_click: Callable[[int, int], None],
+    on_right_click: Callable[[int, int], None],
+    on_hover: Callable[[int, int], None] | None,
+    *,
+    parent: str | int,
+) -> None:
+    output_belt = read_cell_output_belt(cells, grid_width, cell_x, cell_y)
+    if output_belt is None:
+        _add_cell_button(
+            tag,
+            CELL_TEX_UNDECIDED,
+            on_left_click,
+            on_right_click,
+            on_hover,
+            cell_x,
+            cell_y,
+            parent=parent,
+        )
+        return
+
+    to_x = 2 * cell_x - output_belt.from_x
+    to_y = 2 * cell_y - output_belt.from_y
+    belt_tex = texture_for_belt_tile(cell_x, cell_y, output_belt.from_x, output_belt.from_y, to_x, to_y)
+    _add_cell_button(tag, belt_tex, on_left_click, on_right_click, on_hover, cell_x, cell_y, parent=parent)
+
+    flow = flow_key(cell_x, cell_y, output_belt.from_x, output_belt.from_y, to_x, to_y)
+    positions = lane_icon_positions(flow)
+    if positions is None:
+        return
+
+    left_pos, right_pos = positions
+    if output_belt.left_item_id != EMPTY_ITEM_ID:
+        left_tex = texture_for_item_id(output_belt.left_item_id)
+        if left_tex is not None:
+            _add_rate_lane_overlay(
+                left_tex, output_belt.left_min_rate, cell_x, cell_y, left_pos[0], left_pos[1], parent=parent
+            )
+    if output_belt.right_item_id != EMPTY_ITEM_ID:
+        right_tex = texture_for_item_id(output_belt.right_item_id)
+        if right_tex is not None:
+            _add_rate_lane_overlay(
+                right_tex, output_belt.right_min_rate, cell_x, cell_y, right_pos[0], right_pos[1], parent=parent
+            )
+
+
 def clear_grid(parent_tag: str = GRID_CELLS_TAG) -> None:
     if dpg.does_item_exist(parent_tag):
         dpg.delete_item(parent_tag, children_only=True)
@@ -297,6 +446,30 @@ def build_grid(
             cell_tag = get_cell_tag(cells, width, x, y)
             if cell_tag == TYPE_ID_BELT:
                 _add_belt_cell(
+                    tag,
+                    cells,
+                    width,
+                    x,
+                    y,
+                    on_left_click,
+                    on_right_click,
+                    on_hover,
+                    parent=GRID_CANVAS_TAG,
+                )
+            elif cell_tag == TYPE_ID_INPUT_BELT:
+                _add_input_belt_cell(
+                    tag,
+                    cells,
+                    width,
+                    x,
+                    y,
+                    on_left_click,
+                    on_right_click,
+                    on_hover,
+                    parent=GRID_CANVAS_TAG,
+                )
+            elif cell_tag == TYPE_ID_OUTPUT_BELT:
+                _add_output_belt_cell(
                     tag,
                     cells,
                     width,

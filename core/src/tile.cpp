@@ -14,6 +14,11 @@ bool directions_are_opposite(Direction a, Direction b) {
            (a == Direction::West && b == Direction::East);
 }
 
+bool direction_is_valid(Direction direction) {
+    return direction == Direction::North || direction == Direction::East || direction == Direction::South ||
+           direction == Direction::West;
+}
+
 std::pair<Cell, Cell> straight_belt_side_cells(Cell center, Direction flow) {
     switch (flow) {
         case Direction::North:
@@ -51,6 +56,14 @@ std::pair<Cell, Cell> belt_side_cells(Cell center, const BeltTile& belt) {
     return side_cells(center, belt_from_cell(center, belt), belt_to_cell(center, belt));
 }
 
+Cell input_belt_to_cell(Cell center, const InputBeltTile& input_belt) {
+    return cell_in_direction(center, input_belt.to_dir);
+}
+
+Cell output_belt_from_cell(Cell center, const OutputBeltTile& output_belt) {
+    return cell_in_direction(center, output_belt.from_dir);
+}
+
 bool tile_is_valid(const Tile& tile, Cell cell) {
     (void)cell;
     return std::visit(
@@ -59,7 +72,12 @@ bool tile_is_valid(const Tile& tile, Cell cell) {
             if constexpr (std::is_same_v<T, EmptyTile>) {
                 return true;
             } else if constexpr (std::is_same_v<T, BeltTile>) {
-                return belt_dirs_valid(t.from_dir, t.to_dir);
+                return direction_is_valid(t.from_dir) && direction_is_valid(t.to_dir) &&
+                       belt_dirs_valid(t.from_dir, t.to_dir);
+            } else if constexpr (std::is_same_v<T, InputBeltTile>) {
+                return direction_is_valid(t.to_dir);
+            } else if constexpr (std::is_same_v<T, OutputBeltTile>) {
+                return direction_is_valid(t.from_dir);
             } else {
                 return false;
             }

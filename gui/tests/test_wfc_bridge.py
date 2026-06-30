@@ -5,13 +5,17 @@ from snapshot import (
     CELL_STRIDE,
     DIR_E,
     DIR_W,
+    EMPTY_ITEM_ID,
     TAG_EMPTY,
     TAG_UNDECIDED,
     build_minimal_catalog,
     create_cells_buffer,
     encode_cell_empty,
     encode_cell_undecided,
+    set_cell_belt,
     set_cell_empty,
+    set_cell_input_belt,
+    set_cell_output_belt,
 )
 from wfc_bridge import ensure_catalog_loaded, validate
 
@@ -103,3 +107,31 @@ def test_format_cell_info_belt():
     assert "to: (0,2)" in text
     assert "left lane: iron-plate" in text
     assert "right lane: (empty)" in text
+
+
+def test_format_cell_info_input_output_belts():
+    from wfc_bridge import format_cell_info
+
+    cells = create_cells_buffer(3, 1)
+    set_cell_input_belt(cells, 3, 0, 0, DIR_E, 0, EMPTY_ITEM_ID, 3.45, 0.0)
+    set_cell_output_belt(cells, 3, 0, 2, DIR_W, EMPTY_ITEM_ID, 1, 0.0, 2.75)
+
+    input_text = format_cell_info(cells, 3, 1, 0, 0)
+    assert "type: input_belt" in input_text
+    assert "to: (0,1)" in input_text
+    assert "left lane: iron-plate @ 3.5" in input_text
+
+    output_text = format_cell_info(cells, 3, 1, 0, 2)
+    assert "type: output_belt" in output_text
+    assert "from: (0,1)" in output_text
+    assert "right lane: copper-plate @ 2.8" in output_text
+
+
+def test_validate_input_belt_to_belt_snapshot_smoke():
+    cells = create_cells_buffer(2, 1)
+    set_cell_input_belt(cells, 2, 0, 0, DIR_E, EMPTY_ITEM_ID, 0, 0.0, 3.5)
+    set_cell_belt(cells, 2, 0, 1, DIR_W, DIR_E, EMPTY_ITEM_ID, 0)
+
+    is_valid, message = validate(2, 1, cells)
+    assert is_valid is True
+    assert message == ""

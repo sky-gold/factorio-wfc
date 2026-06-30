@@ -28,6 +28,38 @@ void write_belt_cell(std::vector<std::uint8_t>& cells,
     std::memcpy(cells.data() + offset + 8, &right_item_id, sizeof(right_item_id));
 }
 
+void write_input_belt_cell(std::vector<std::uint8_t>& cells,
+                           std::size_t cell_index,
+                           std::uint8_t to_dir,
+                           std::uint32_t left_item_id,
+                           std::uint32_t right_item_id,
+                           double left_max_rate,
+                           double right_max_rate) {
+    const std::size_t offset = cell_index * kCellStride;
+    cells[offset] = kTypeIdInputBelt;
+    cells[offset + 1] = to_dir;
+    std::memcpy(cells.data() + offset + 4, &left_item_id, sizeof(left_item_id));
+    std::memcpy(cells.data() + offset + 8, &right_item_id, sizeof(right_item_id));
+    std::memcpy(cells.data() + offset + 12, &left_max_rate, sizeof(left_max_rate));
+    std::memcpy(cells.data() + offset + 20, &right_max_rate, sizeof(right_max_rate));
+}
+
+void write_output_belt_cell(std::vector<std::uint8_t>& cells,
+                            std::size_t cell_index,
+                            std::uint8_t from_dir,
+                            std::uint32_t left_item_id,
+                            std::uint32_t right_item_id,
+                            double left_min_rate,
+                            double right_min_rate) {
+    const std::size_t offset = cell_index * kCellStride;
+    cells[offset] = kTypeIdOutputBelt;
+    cells[offset + 1] = from_dir;
+    std::memcpy(cells.data() + offset + 4, &left_item_id, sizeof(left_item_id));
+    std::memcpy(cells.data() + offset + 8, &right_item_id, sizeof(right_item_id));
+    std::memcpy(cells.data() + offset + 12, &left_min_rate, sizeof(left_min_rate));
+    std::memcpy(cells.data() + offset + 20, &right_min_rate, sizeof(right_min_rate));
+}
+
 TEST(SnapshotCodecTest, DecodeUndecidedGrid) {
     std::vector<std::uint8_t> cells(2 * 2 * kCellStride, kCellTagUndecided);
 
@@ -119,6 +151,64 @@ TEST(SnapshotCodecTest, RejectsInvalidBeltDirection) {
     std::string error;
     EXPECT_FALSE(decode_snapshot(1, 1, {cells.data(), cells.size()}, grid, error));
     EXPECT_FALSE(error.empty());
+}
+
+TEST(SnapshotCodecTest, DecodeInputBeltWithRates) {
+    std::vector<std::uint8_t> cells(1 * 1 * kCellStride, kCellTagUndecided);
+    write_input_belt_cell(cells, 0, static_cast<std::uint8_t>(Direction::East), 1, 2, 3.5, 4.25);
+
+    Grid grid(1, 1);
+    std::string error;
+    ASSERT_TRUE(decode_snapshot(1, 1, {cells.data(), cells.size()}, grid, error)) << error;
+
+    const auto tile = grid.get(0, 0);
+    ASSERT_TRUE(tile.has_value());
+    EXPECT_EQ(get_tile_type(tile.value()), TileType::InputBelt);
+
+    const auto* input_belt = std::get_if<InputBeltTile>(&tile.value());
+    ASSERT_NE(input_belt, nullptr);
+    EXPECT_EQ(input_belt->to_dir, Direction::East);
+    EXPECT_EQ(input_belt->left_item_id, 1u);
+    EXPECT_EQ(input_belt->right_item_id, 2u);
+    EXPECT_DOUBLE_EQ(input_belt->left_max_rate, 3.5);
+    EXPECT_DOUBLE_EQ(input_belt->right_max_rate, 4.25);
+}
+
+TEST(SnapshotCodecTest, DecodeOutputBeltWithRates) {
+    std::vector<std::uint8_t> cells(1 * 1 * kCellStride, kCellTagUndecided);
+    write_output_belt_cell(cells, 0, static_cast<std::uint8_t>(Direction::West), 1, 2, 1.5, 2.75);
+
+    Grid grid(1, 1);
+    std::string error;
+    ASSERT_TRUE(decode_snapshot(1, 1, {cells.data(), cells.size()}, grid, error)) << error;
+
+    const auto tile = grid.get(0, 0);
+    ASSERT_TRUE(tile.has_value());
+    EXPECT_EQ(get_tile_type(tile.value()), TileType::OutputBelt);
+
+    const auto* output_belt = std::get_if<OutputBeltTile>(&tile.value());
+    ASSERT_NE(output_belt, nullptr);
+    EXPECT_EQ(output_belt->from_dir, Direction::West);
+    EXPECT_EQ(output_belt->left_item_id, 1u);
+    EXPECT_EQ(output_belt->right_item_id, 2u);
+    EXPECT_DOUBLE_EQ(output_belt->left_min_rate, 1.5);
+    EXPECT_DOUBLE_EQ(output_belt->right_min_rate, 2.75);
+}
+
+TEST(SnapshotCodecTest, RejectsInvalidInputOutputBeltDirection) {
+    std::vector<std::uint8_t> cells(2 * 1 * kCellStride, kCellTagUndecided);
+    write_input_belt_cell(cells, 0, 4, 1, 2, 3.5, 4.25);
+    write_output_belt_cell(cells, 1, static_cast<std::uint8_t>(Direction::West), 1, 2, 1.5, 2.75);
+
+    Grid grid(1, 1);
+    std::string error;
+    EXPECT_FALSE(decode_snapshot(2, 1, {cells.data(), cells.size()}, grid, error));
+    EXPECT_NE(error.find("input belt"), std::string::npos);
+
+    write_input_belt_cell(cells, 0, static_cast<std::uint8_t>(Direction::East), 1, 2, 3.5, 4.25);
+    write_output_belt_cell(cells, 1, 5, 1, 2, 1.5, 2.75);
+    EXPECT_FALSE(decode_snapshot(2, 1, {cells.data(), cells.size()}, grid, error));
+    EXPECT_NE(error.find("output belt"), std::string::npos);
 }
 
 }  // namespace

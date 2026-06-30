@@ -2,6 +2,7 @@
 
 #include "cell.h"
 #include "grid.h"
+#include "rules/belt_flow.h"
 #include "rules/rule_result.h"
 #include "tile.h"
 
@@ -59,28 +60,26 @@ ValidationResult check_feeder_belt_into_cell(const Grid& grid, Cell cell, Cell f
         return rules_detail::valid();
     }
 
-    if (std::holds_alternative<EmptyTile>(feeder_tile.value())) {
+    const std::optional<rules_detail::BeltLaneItems> feeder_lanes =
+        rules_detail::outgoing_lane_items_to_cell(feeder_cell, cell, feeder_tile.value());
+    if (!feeder_lanes.has_value()) {
         return rules_detail::valid();
     }
-
-    const BeltTile& feeder_belt = std::get<BeltTile>(feeder_tile.value());
-    const Cell feeder_to = belt_to_cell(feeder_cell, feeder_belt);
-    if (!cell_equals(feeder_to, cell)) {
-        return rules_detail::valid();
-    }
-    if (feeder_belt.left_item_id != kEmptyItemId) {
+    if (feeder_lanes.value().left_item_id != kEmptyItemId) {
         lanes.left = true;
     }
-    if (feeder_belt.right_item_id != kEmptyItemId) {
+    if (feeder_lanes.value().right_item_id != kEmptyItemId) {
         lanes.right = true;
     }
     ValidationResult result =
-        check_resource_feeds_into_lane(center_belt, LaneSide::Left, cell, feeder_cell, feeder_belt.left_item_id);
+        check_resource_feeds_into_lane(center_belt, LaneSide::Left, cell, feeder_cell,
+                                       feeder_lanes.value().left_item_id);
     if (!result.is_valid) {
         return result;
     }
     result =
-        check_resource_feeds_into_lane(center_belt, LaneSide::Right, cell, feeder_cell, feeder_belt.right_item_id);
+        check_resource_feeds_into_lane(center_belt, LaneSide::Right, cell, feeder_cell,
+                                       feeder_lanes.value().right_item_id);
     if (!result.is_valid) {
         return result;
     }
@@ -99,28 +98,26 @@ ValidationResult check_left_side_feeder_belt_into_cell(const Grid& grid, Cell ce
         return rules_detail::valid();
     }
 
-    if (std::holds_alternative<EmptyTile>(feeder_tile.value())) {
+    const std::optional<rules_detail::BeltLaneItems> feeder_lanes =
+        rules_detail::outgoing_lane_items_to_cell(feeder_cell, cell, feeder_tile.value());
+    if (!feeder_lanes.has_value()) {
         return rules_detail::valid();
     }
-
-    const BeltTile& feeder_belt = std::get<BeltTile>(feeder_tile.value());
-    const Cell feeder_to = belt_to_cell(feeder_cell, feeder_belt);
-    if (!cell_equals(feeder_to, cell)) {
-        return rules_detail::valid();
-    }
-    if (feeder_belt.left_item_id != kEmptyItemId) {
+    if (feeder_lanes.value().left_item_id != kEmptyItemId) {
         lanes.left = true;
     }
-    if (feeder_belt.right_item_id != kEmptyItemId) {
+    if (feeder_lanes.value().right_item_id != kEmptyItemId) {
         lanes.left = true;
     }
     ValidationResult result =
-        check_resource_feeds_into_lane(center_belt, LaneSide::Left, cell, feeder_cell, feeder_belt.left_item_id);
+        check_resource_feeds_into_lane(center_belt, LaneSide::Left, cell, feeder_cell,
+                                       feeder_lanes.value().left_item_id);
     if (!result.is_valid) {
         return result;
     }
     result =
-        check_resource_feeds_into_lane(center_belt, LaneSide::Left, cell, feeder_cell, feeder_belt.right_item_id);
+        check_resource_feeds_into_lane(center_belt, LaneSide::Left, cell, feeder_cell,
+                                       feeder_lanes.value().right_item_id);
     if (!result.is_valid) {
         return result;
     }
@@ -139,28 +136,26 @@ ValidationResult check_right_side_feeder_belt_into_cell(const Grid& grid, Cell c
         return rules_detail::valid();
     }
 
-    if (std::holds_alternative<EmptyTile>(feeder_tile.value())) {
+    const std::optional<rules_detail::BeltLaneItems> feeder_lanes =
+        rules_detail::outgoing_lane_items_to_cell(feeder_cell, cell, feeder_tile.value());
+    if (!feeder_lanes.has_value()) {
         return rules_detail::valid();
     }
-
-    const BeltTile& feeder_belt = std::get<BeltTile>(feeder_tile.value());
-    const Cell feeder_to = belt_to_cell(feeder_cell, feeder_belt);
-    if (!cell_equals(feeder_to, cell)) {
-        return rules_detail::valid();
-    }
-    if (feeder_belt.left_item_id != kEmptyItemId) {
+    if (feeder_lanes.value().left_item_id != kEmptyItemId) {
         lanes.right = true;
     }
-    if (feeder_belt.right_item_id != kEmptyItemId) {
+    if (feeder_lanes.value().right_item_id != kEmptyItemId) {
         lanes.right = true;
     }
     ValidationResult result =
-        check_resource_feeds_into_lane(center_belt, LaneSide::Right, cell, feeder_cell, feeder_belt.left_item_id);
+        check_resource_feeds_into_lane(center_belt, LaneSide::Right, cell, feeder_cell,
+                                       feeder_lanes.value().left_item_id);
     if (!result.is_valid) {
         return result;
     }
     result =
-        check_resource_feeds_into_lane(center_belt, LaneSide::Right, cell, feeder_cell, feeder_belt.right_item_id);
+        check_resource_feeds_into_lane(center_belt, LaneSide::Right, cell, feeder_cell,
+                                       feeder_lanes.value().right_item_id);
     if (!result.is_valid) {
         return result;
     }
@@ -177,12 +172,8 @@ TriState cell_feeds_into_cell_tristate(const Grid& grid, Cell feeder, Cell cell)
     if (!feeder_tile.has_value()) {
         return TriState::Unknown;
     }
-    if (std::holds_alternative<BeltTile>(feeder_tile.value())) {
-        const BeltTile& belt = std::get<BeltTile>(feeder_tile.value());
-        const Cell to = belt_to_cell(feeder, belt);
-        return cell_equals(to, cell) ? TriState::True : TriState::False;
-    }
-    return TriState::False;
+    return rules_detail::outgoing_lane_items_to_cell(feeder, cell, feeder_tile.value()).has_value() ? TriState::True
+                                                                                                    : TriState::False;
 }
 
 ValidationResult check_belt_resources(const Grid& grid, Cell cell, Cell from, Cell to, const BeltTile& belt) {

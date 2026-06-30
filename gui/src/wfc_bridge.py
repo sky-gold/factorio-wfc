@@ -20,11 +20,15 @@ from snapshot import (  # noqa: E402
     TAG_EMPTY,
     TAG_UNDECIDED,
     TYPE_ID_BELT,
+    TYPE_ID_INPUT_BELT,
+    TYPE_ID_OUTPUT_BELT,
     build_catalog_blob,
     build_minimal_catalog,
     get_cell_tag,
     is_cell_undecided,
     read_cell_belt,
+    read_cell_input_belt,
+    read_cell_output_belt,
 )
 
 EDITOR_ITEMS = ["iron-plate", "copper-plate", "iron-ore"]
@@ -88,6 +92,34 @@ def format_cell_info(cells: bytearray, width: int, height: int, x: int, y: int) 
         ]
         return "\n".join(lines)
 
+    if tag == TYPE_ID_INPUT_BELT:
+        input_belt = read_cell_input_belt(cells, width, x, y)
+        if input_belt is None:
+            return f"Cell ({x},{y})\n  status: occupied\n  type: input_belt (invalid payload)"
+        lines = [
+            f"Cell ({x},{y})",
+            "  status: occupied",
+            "  type: input_belt",
+            f"  to: ({input_belt.to_x},{input_belt.to_y})",
+            f"  left lane: {item_label(input_belt.left_item_id)} @ {input_belt.left_max_rate:.1f}",
+            f"  right lane: {item_label(input_belt.right_item_id)} @ {input_belt.right_max_rate:.1f}",
+        ]
+        return "\n".join(lines)
+
+    if tag == TYPE_ID_OUTPUT_BELT:
+        output_belt = read_cell_output_belt(cells, width, x, y)
+        if output_belt is None:
+            return f"Cell ({x},{y})\n  status: occupied\n  type: output_belt (invalid payload)"
+        lines = [
+            f"Cell ({x},{y})",
+            "  status: occupied",
+            "  type: output_belt",
+            f"  from: ({output_belt.from_x},{output_belt.from_y})",
+            f"  left lane: {item_label(output_belt.left_item_id)} @ {output_belt.left_min_rate:.1f}",
+            f"  right lane: {item_label(output_belt.right_item_id)} @ {output_belt.right_min_rate:.1f}",
+        ]
+        return "\n".join(lines)
+
     return f"Cell ({x},{y})\n  status: occupied\n  type: unknown ({tag})"
 
 
@@ -102,6 +134,6 @@ def worst_case_inspector_body() -> str:
             "  from: (99,99)",
             "  to: (99,99)",
             f"  left lane: {longest_item}",
-            f"  right lane: {longest_item}",
+            f"  right lane: {longest_item} @ 999.9",
         ]
     )

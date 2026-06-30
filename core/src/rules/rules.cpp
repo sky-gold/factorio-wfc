@@ -2,6 +2,8 @@
 
 #include "rules/belt_rules.h"
 #include "rules/empty_rules.h"
+#include "rules/input_belt_rules.h"
+#include "rules/output_belt_rules.h"
 #include "rules/rule_result.h"
 
 #include <optional>

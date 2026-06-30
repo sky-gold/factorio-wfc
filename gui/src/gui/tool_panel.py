@@ -9,8 +9,8 @@ import dearpygui.dearpygui as dpg
 from snapshot import DIR_E, DIR_LABELS, DIR_W
 from wfc_bridge import EDITOR_ITEMS, item_key_to_id
 
-CELL_TYPE_LABELS = ["Empty", "Belt"]
-CELL_TYPE_VALUES = ["empty", "belt"]
+CELL_TYPE_LABELS = ["Empty", "Belt", "InputBelt", "OutputBelt"]
+CELL_TYPE_VALUES = ["empty", "belt", "input_belt", "output_belt"]
 
 LANE_ITEM_CHOICES = ["(empty)"] + EDITOR_ITEMS
 
@@ -22,6 +22,8 @@ class ToolState:
     to_dir: int = DIR_E
     left_item_key: str = "(empty)"
     right_item_key: str = "(empty)"
+    left_rate: float = 1.0
+    right_rate: float = 1.0
 
 
 def build_cell_type_panel(state: ToolState, on_change) -> None:
@@ -93,11 +95,70 @@ def _show_params_for_type(state: ToolState) -> None:
         )
         return
 
+    if state.cell_type == "input_belt":
+        dpg.add_text("To direction", parent="cell_params_group")
+        dpg.add_combo(
+            items=list(DIR_LABELS),
+            default_value=DIR_LABELS[state.to_dir],
+            callback=lambda s, v: setattr(state, "to_dir", DIR_LABELS.index(v)),
+            parent="cell_params_group",
+            tag="input_belt_to_dir",
+        )
+        _add_lane_controls(state, "input_belt")
+        return
+
+    if state.cell_type == "output_belt":
+        dpg.add_text("From direction", parent="cell_params_group")
+        dpg.add_combo(
+            items=list(DIR_LABELS),
+            default_value=DIR_LABELS[state.from_dir],
+            callback=lambda s, v: setattr(state, "from_dir", DIR_LABELS.index(v)),
+            parent="cell_params_group",
+            tag="output_belt_from_dir",
+        )
+        _add_lane_controls(state, "output_belt")
+        return
+
     dpg.add_text(f"No parameters for {state.cell_type}", parent="cell_params_group")
 
 
+def _add_lane_controls(state: ToolState, tag_prefix: str) -> None:
+    dpg.add_text("Left lane", parent="cell_params_group")
+    dpg.add_combo(
+        items=LANE_ITEM_CHOICES,
+        default_value=state.left_item_key,
+        callback=lambda s, v: setattr(state, "left_item_key", v),
+        parent="cell_params_group",
+        tag=f"{tag_prefix}_left_item",
+    )
+    dpg.add_input_float(
+        label="Left rate",
+        default_value=state.left_rate,
+        callback=lambda s, v: setattr(state, "left_rate", float(v)),
+        parent="cell_params_group",
+        tag=f"{tag_prefix}_left_rate",
+        format="%.1f",
+    )
+    dpg.add_text("Right lane", parent="cell_params_group")
+    dpg.add_combo(
+        items=LANE_ITEM_CHOICES,
+        default_value=state.right_item_key,
+        callback=lambda s, v: setattr(state, "right_item_key", v),
+        parent="cell_params_group",
+        tag=f"{tag_prefix}_right_item",
+    )
+    dpg.add_input_float(
+        label="Right rate",
+        default_value=state.right_rate,
+        callback=lambda s, v: setattr(state, "right_rate", float(v)),
+        parent="cell_params_group",
+        tag=f"{tag_prefix}_right_rate",
+        format="%.1f",
+    )
+
+
 def apply_tool_to_cell(cells: bytearray, width: int, x: int, y: int, state: ToolState) -> None:
-    from snapshot import set_cell_belt, set_cell_empty
+    from snapshot import set_cell_belt, set_cell_empty, set_cell_input_belt, set_cell_output_belt
 
     if state.cell_type == "empty":
         set_cell_empty(cells, width, x, y)
@@ -111,4 +172,28 @@ def apply_tool_to_cell(cells: bytearray, width: int, x: int, y: int, state: Tool
             state.to_dir,
             item_key_to_id(state.left_item_key),
             item_key_to_id(state.right_item_key),
+        )
+    elif state.cell_type == "input_belt":
+        set_cell_input_belt(
+            cells,
+            width,
+            x,
+            y,
+            state.to_dir,
+            item_key_to_id(state.left_item_key),
+            item_key_to_id(state.right_item_key),
+            state.left_rate,
+            state.right_rate,
+        )
+    elif state.cell_type == "output_belt":
+        set_cell_output_belt(
+            cells,
+            width,
+            x,
+            y,
+            state.from_dir,
+            item_key_to_id(state.left_item_key),
+            item_key_to_id(state.right_item_key),
+            state.left_rate,
+            state.right_rate,
         )

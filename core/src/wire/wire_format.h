@@ -13,6 +13,8 @@ inline constexpr std::uint8_t kCellTagUndecided = 0xFF;
 inline constexpr std::uint8_t kCellTagEmpty = 0x00;
 
 inline constexpr std::uint8_t kTypeIdBelt = 10;
+inline constexpr std::uint8_t kTypeIdInputBelt = 11;
+inline constexpr std::uint8_t kTypeIdOutputBelt = 12;
 
 inline constexpr std::uint8_t kSectionItems = 0x01;
 inline constexpr std::uint8_t kSectionRecipes = 0x02;

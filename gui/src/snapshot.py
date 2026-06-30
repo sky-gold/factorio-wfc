@@ -16,6 +16,8 @@ CELL_STRIDE = 32
 TAG_UNDECIDED = 0xFF
 TAG_EMPTY = 0x00
 TYPE_ID_BELT = 10
+TYPE_ID_INPUT_BELT = 11
+TYPE_ID_OUTPUT_BELT = 12
 
 DIR_N = 0
 DIR_E = 1
@@ -101,6 +103,44 @@ def encode_cell_belt(
     return bytes(cell)
 
 
+def encode_cell_input_belt(
+    to_dir: int,
+    left_item_id: int = EMPTY_ITEM_ID,
+    right_item_id: int = EMPTY_ITEM_ID,
+    left_max_rate: float = 0.0,
+    right_max_rate: float = 0.0,
+) -> bytes:
+    cell = bytearray(CELL_STRIDE)
+    cell[0] = TYPE_ID_INPUT_BELT
+    cell[1] = to_dir
+    cell[2] = 0
+    cell[3] = 0
+    struct.pack_into("<I", cell, 4, left_item_id)
+    struct.pack_into("<I", cell, 8, right_item_id)
+    struct.pack_into("<d", cell, 12, left_max_rate)
+    struct.pack_into("<d", cell, 20, right_max_rate)
+    return bytes(cell)
+
+
+def encode_cell_output_belt(
+    from_dir: int,
+    left_item_id: int = EMPTY_ITEM_ID,
+    right_item_id: int = EMPTY_ITEM_ID,
+    left_min_rate: float = 0.0,
+    right_min_rate: float = 0.0,
+) -> bytes:
+    cell = bytearray(CELL_STRIDE)
+    cell[0] = TYPE_ID_OUTPUT_BELT
+    cell[1] = from_dir
+    cell[2] = 0
+    cell[3] = 0
+    struct.pack_into("<I", cell, 4, left_item_id)
+    struct.pack_into("<I", cell, 8, right_item_id)
+    struct.pack_into("<d", cell, 12, left_min_rate)
+    struct.pack_into("<d", cell, 20, right_min_rate)
+    return bytes(cell)
+
+
 def set_cell_belt(
     cells: bytearray,
     width: int,
@@ -117,6 +157,40 @@ def set_cell_belt(
     )
 
 
+def set_cell_input_belt(
+    cells: bytearray,
+    width: int,
+    x: int,
+    y: int,
+    to_dir: int,
+    left_item_id: int = EMPTY_ITEM_ID,
+    right_item_id: int = EMPTY_ITEM_ID,
+    left_max_rate: float = 0.0,
+    right_max_rate: float = 0.0,
+) -> None:
+    offset = cell_index(width, x, y)
+    cells[offset : offset + CELL_STRIDE] = encode_cell_input_belt(
+        to_dir, left_item_id, right_item_id, left_max_rate, right_max_rate
+    )
+
+
+def set_cell_output_belt(
+    cells: bytearray,
+    width: int,
+    x: int,
+    y: int,
+    from_dir: int,
+    left_item_id: int = EMPTY_ITEM_ID,
+    right_item_id: int = EMPTY_ITEM_ID,
+    left_min_rate: float = 0.0,
+    right_min_rate: float = 0.0,
+) -> None:
+    offset = cell_index(width, x, y)
+    cells[offset : offset + CELL_STRIDE] = encode_cell_output_belt(
+        from_dir, left_item_id, right_item_id, left_min_rate, right_min_rate
+    )
+
+
 @dataclass(frozen=True)
 class BeltCellInfo:
     from_x: int
@@ -125,6 +199,26 @@ class BeltCellInfo:
     to_y: int
     left_item_id: int
     right_item_id: int
+
+
+@dataclass(frozen=True)
+class InputBeltCellInfo:
+    to_x: int
+    to_y: int
+    left_item_id: int
+    right_item_id: int
+    left_max_rate: float
+    right_max_rate: float
+
+
+@dataclass(frozen=True)
+class OutputBeltCellInfo:
+    from_x: int
+    from_y: int
+    left_item_id: int
+    right_item_id: int
+    left_min_rate: float
+    right_min_rate: float
 
 
 def read_cell_belt(cells: bytearray, width: int, x: int, y: int) -> BeltCellInfo | None:
@@ -138,6 +232,36 @@ def read_cell_belt(cells: bytearray, width: int, x: int, y: int) -> BeltCellInfo
     from_x, from_y = dir_to_cell(x, y, from_dir)
     to_x, to_y = dir_to_cell(x, y, to_dir)
     return BeltCellInfo(from_x, from_y, to_x, to_y, left_item_id, right_item_id)
+
+
+def read_cell_input_belt(
+    cells: bytearray, width: int, x: int, y: int
+) -> InputBeltCellInfo | None:
+    offset = cell_index(width, x, y)
+    if cells[offset] != TYPE_ID_INPUT_BELT:
+        return None
+    to_dir = cells[offset + 1]
+    left_item_id = struct.unpack_from("<I", cells, offset + 4)[0]
+    right_item_id = struct.unpack_from("<I", cells, offset + 8)[0]
+    left_max_rate = struct.unpack_from("<d", cells, offset + 12)[0]
+    right_max_rate = struct.unpack_from("<d", cells, offset + 20)[0]
+    to_x, to_y = dir_to_cell(x, y, to_dir)
+    return InputBeltCellInfo(to_x, to_y, left_item_id, right_item_id, left_max_rate, right_max_rate)
+
+
+def read_cell_output_belt(
+    cells: bytearray, width: int, x: int, y: int
+) -> OutputBeltCellInfo | None:
+    offset = cell_index(width, x, y)
+    if cells[offset] != TYPE_ID_OUTPUT_BELT:
+        return None
+    from_dir = cells[offset + 1]
+    left_item_id = struct.unpack_from("<I", cells, offset + 4)[0]
+    right_item_id = struct.unpack_from("<I", cells, offset + 8)[0]
+    left_min_rate = struct.unpack_from("<d", cells, offset + 12)[0]
+    right_min_rate = struct.unpack_from("<d", cells, offset + 20)[0]
+    from_x, from_y = dir_to_cell(x, y, from_dir)
+    return OutputBeltCellInfo(from_x, from_y, left_item_id, right_item_id, left_min_rate, right_min_rate)
 
 
 GRID_EXPORT_FORMAT = "fwfc-grid-v1"
@@ -201,6 +325,40 @@ def _cell_to_export_dict(
             "right_item": _export_lane_item(belt.right_item_id, item_label_fn),
         }
 
+    if tag == TYPE_ID_INPUT_BELT:
+        input_belt = read_cell_input_belt(cells, width, x, y)
+        if input_belt is None:
+            return {"x": x, "y": y, "type": "input_belt", "error": "invalid payload"}
+        to_dir = cells[cell_index(width, x, y) + 1]
+        return {
+            "x": x,
+            "y": y,
+            "type": "input_belt",
+            "to_dir": DIR_NAMES[to_dir],
+            "to": {"x": input_belt.to_x, "y": input_belt.to_y},
+            "left_item": _export_lane_item(input_belt.left_item_id, item_label_fn),
+            "right_item": _export_lane_item(input_belt.right_item_id, item_label_fn),
+            "left_max_rate": input_belt.left_max_rate,
+            "right_max_rate": input_belt.right_max_rate,
+        }
+
+    if tag == TYPE_ID_OUTPUT_BELT:
+        output_belt = read_cell_output_belt(cells, width, x, y)
+        if output_belt is None:
+            return {"x": x, "y": y, "type": "output_belt", "error": "invalid payload"}
+        from_dir = cells[cell_index(width, x, y) + 1]
+        return {
+            "x": x,
+            "y": y,
+            "type": "output_belt",
+            "from_dir": DIR_NAMES[from_dir],
+            "from": {"x": output_belt.from_x, "y": output_belt.from_y},
+            "left_item": _export_lane_item(output_belt.left_item_id, item_label_fn),
+            "right_item": _export_lane_item(output_belt.right_item_id, item_label_fn),
+            "left_min_rate": output_belt.left_min_rate,
+            "right_min_rate": output_belt.right_min_rate,
+        }
+
     return {"x": x, "y": y, "type": "unknown", "type_id": tag}
 
 
@@ -248,6 +406,40 @@ def _apply_import_cell(
         left_item_id = _import_lane_item(cell.get("left_item"), item_key_to_id)
         right_item_id = _import_lane_item(cell.get("right_item"), item_key_to_id)
         set_cell_belt(cells, width, x, y, from_dir, to_dir, left_item_id, right_item_id)
+        return
+
+    if cell_type == "input_belt":
+        to_dir = DIR_BY_NAME[cell["to_dir"]]
+        left_item_id = _import_lane_item(cell.get("left_item"), item_key_to_id)
+        right_item_id = _import_lane_item(cell.get("right_item"), item_key_to_id)
+        set_cell_input_belt(
+            cells,
+            width,
+            x,
+            y,
+            to_dir,
+            left_item_id,
+            right_item_id,
+            float(cell.get("left_max_rate", 0.0)),
+            float(cell.get("right_max_rate", 0.0)),
+        )
+        return
+
+    if cell_type == "output_belt":
+        from_dir = DIR_BY_NAME[cell["from_dir"]]
+        left_item_id = _import_lane_item(cell.get("left_item"), item_key_to_id)
+        right_item_id = _import_lane_item(cell.get("right_item"), item_key_to_id)
+        set_cell_output_belt(
+            cells,
+            width,
+            x,
+            y,
+            from_dir,
+            left_item_id,
+            right_item_id,
+            float(cell.get("left_min_rate", 0.0)),
+            float(cell.get("right_min_rate", 0.0)),
+        )
         return
 
     raise ValueError(f"unsupported cell type at ({x},{y}): {cell_type!r}")
