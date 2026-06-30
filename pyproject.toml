@@ -1,4 +1,4 @@
 [tool.pytest.ini_options]
-pythonpath = ["src_py"]
-testpaths = ["tests"]
+pythonpath = ["gui/src"]
+testpaths = ["gui/tests"]
 python_files = ["test_*.py"]
